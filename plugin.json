@@ -34,14 +34,6 @@
       "description" : "The mounted device to check for free space. (either this or the Mount Point directory need to be set for the plugin to function properly)",
       "type" : "string",
       "required" : false
-    },
-    {
-      "title": "Poll Time (ms)",
-      "name": "pollInterval",
-      "description": "How often (in milliseconds) to poll for metrics.",
-      "type": "string",
-      "default": 1000,
-      "required": true
     }
   ]
 }
