@@ -40,7 +40,7 @@ local framework = {}
 local querystring = require('querystring')
 local boundary = require('boundary')
 
-framework.version = '0.9.3'
+framework.version = '0.9.2'
 framework.boundary = boundary
 framework.params = boundary.param or json.parse(fs.readFileSync('param.json')) or {}
 framework.plugin_params = boundary.plugin or json.parse(fs.readFileSync('plugin.json')) or {}
@@ -491,6 +491,7 @@ function framework.string.concat(s1, s2, char)
   end
   return s1 .. char .. s2
 end
+
 
 --- Utility functions.
 -- Various functions that helps with common tasks.
@@ -989,7 +990,8 @@ local DataSourcePoller = Emitter:extend()
 -- @param dataSource A DataSource to be polled
 -- @name DataSourcePoller:new
 function DataSourcePoller:initialize(pollInterval, dataSource)
-  self.pollInterval = (pollInterval < 1000 and 1000) or pollInterval
+  self.pollInterval = pollInterval
+  if self.pollInterval < 500 then self.pollInterval = self.pollInterval * 1000 end
   self.dataSource = dataSource
   dataSource:propagate('error', self)
 end
@@ -1029,7 +1031,8 @@ function Plugin:initialize(params, dataSource)
 
   assert(dataSource, 'Plugin:new dataSource is required.')
 
-  local pollInterval = (params.pollInterval < 1000 and 1000) or params.pollInterval
+  local pollInterval = params.pollInterval or 1000
+  if pollInterval < 500 then pollInterval = pollInterval * 1000 end
 
   if not Plugin:_isPoller(dataSource) then
     self.dataSource = DataSourcePoller:new(pollInterval, dataSource)
@@ -1181,7 +1184,6 @@ end
 -- @param timestamp the time the metric was retrieved
 -- You can override this on your plugin instance.
 function Plugin:onFormat(metric, value, source, timestamp)
-  source = string.gsub(source, '[!@#$%%^&*() {}<>/\\|]', '_')
   if timestamp then
     return string.format('%s %f %s %s', metric, value, source, timestamp)
   else
@@ -1412,7 +1414,7 @@ function CommandOutputDataSource:fetch(context, callback, parser, params)
   proc.stderr:on('data', function (data) output = output .. data end)
   proc:on('exit', function (exitcode)
     if not self:isSuccess(exitcode) then
-      self:emit('error', {message = 'Command terminated with exitcode \'' .. exitcode .. '\' and message \'' .. string.gsub(output, '\n', ' ') .. '\''})
+      self:emit('error', {message = 'Command terminated with exitcode \'' .. exitcode .. '\' and message \'' .. output .. '\''})
       if not self.callback_on_errors then
         return
       end
@@ -1465,25 +1467,6 @@ function MeterDataSource:queryMetricCommand(params)
   return '{"jsonrpc":"2.0","method":"query_metric","id":1,"params":' .. json.stringify(params) .. '}\n'
 end
 
-local FileReaderDataSource = DataSource:extend()
-function FileReaderDataSource:initialize(path)
-  self.path = path 
-end
-
-function FileReaderDataSource:fetch(context, func, params)
-  if not fs.existsSync(self.path) then
-    self:emit('error', 'The "' .. self.path .. '" was not found.')
-  else 
-    local success, result = pcall(fs.readFileSync, self.path)
-	  if not success then
-      self:emit('error', failure)
-    else
-      func(result)
-    end
-  end
-end
-
-framework.FileReaderDataSource = FileReaderDataSource
 framework.CommandOutputDataSource = CommandOutputDataSource
 framework.RandomDataSource = RandomDataSource
 framework.DataSourcePoller = DataSourcePoller
